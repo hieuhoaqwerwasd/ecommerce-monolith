@@ -1,0 +1,6 @@
+{
+  "name": "ecommerce-monolith", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": {"start":"node src/server.js", "generate":"prisma generate", "migrate":"prisma migrate deploy", "seed":"node prisma/seed.js", "test":"node --test test/*.test.js", "test:integration":"node scripts/smoke.js"},
+  "dependencies": {"@prisma/client":"6.19.0", "prisma":"6.19.0", "bcryptjs":"^3.0.2", "dotenv":"^16.6.1", "express":"^5.1.0", "jsonwebtoken":"^9.0.2"},
+  "overrides": {"effect":"^3.20.0", "deepmerge-ts":"^8.0.0"}
+}

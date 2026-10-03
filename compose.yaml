@@ -1,0 +1,26 @@
+name: bt-p2
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env first}
+      POSTGRES_DB: ecommerce
+    volumes: [pg_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U app -d ecommerce"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  api:
+    build: .
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@postgres:5432/ecommerce
+      JWT_SECRET: ${JWT_SECRET:?Create .env first}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Create .env first}
+    ports: ["127.0.0.1:3002:3000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+volumes:
+  pg_data:

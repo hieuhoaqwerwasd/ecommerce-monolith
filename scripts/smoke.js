@@ -1,0 +1,35 @@
+import 'dotenv/config';
+import assert from 'node:assert/strict';
+const base=process.env.BASE_URL||'http://localhost:3002';
+async function request(path,method='GET',body,token,expected=200){
+  const r=await fetch(base+'/api'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});
+  const data=await r.json();assert.equal(r.status,expected,JSON.stringify(data));return data;
+}
+await request('/health');
+const admin=(await request('/auth/login','POST',{username:'admin',password:process.env.ADMIN_PASSWORD})).accessToken;
+const credentials={username:'test_'+Date.now(),password:'DemoPass123!'};
+const user=await request('/auth/register','POST',{...credentials,role:'admin',score:100},undefined,201);
+assert.equal(user.role,'normal');assert.equal(user.membership.score,10);
+const token=(await request('/auth/login','POST',credentials)).accessToken;
+const x=await request('/products','POST',{pname:'X smoke',price:100,quantity:10},admin,201);
+const y=await request('/products','POST',{pname:'Y smoke',price:20,quantity:20},admin,201);
+const body={items:[{pid:x.pid,qty:2},{pid:y.pid,qty:5}],uid:1,discount:999,createat:'2000-01-01'};
+await request('/orders','POST',body,undefined,401);
+await request('/products','POST',{pname:'forbidden',price:1,quantity:1},token,403);
+const start=Date.now();
+const o=await request('/orders','POST',body,token,201);
+assert.equal(o.uid,user.uid);assert.equal(Number(o.total),270);assert.equal(Number(o.discount),30);
+assert.ok(Date.parse(o.createat)>=start-2000);assert.equal(o.items.length,2);
+assert.equal((await request('/products/'+x.pid,'GET',undefined,token)).quantity,8);
+assert.equal((await request('/products/'+y.pid,'GET',undefined,token)).quantity,15);
+assert.equal((await request('/shipments/'+o.shipment.shipid,'GET',undefined,token)).status,'PENDING');
+await request('/orders/'+o.oid,'GET',undefined,token);
+await request('/orders','POST',{items:[{pid:x.pid,qty:1},{pid:y.pid,qty:99999}]},token,409);
+assert.equal((await request('/products/'+x.pid,'GET',undefined,token)).quantity,8,'rollback restores earlier decrements');
+await request('/customers/'+user.uid,'PUT',{mid:1},token,403);
+const c=await request('/products','POST',{pname:'Race',price:1,quantity:1},admin,201);
+const race=await Promise.all([1,2].map(()=>fetch(base+'/api/orders',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({items:[{pid:c.pid,qty:1}]})})));
+assert.deepEqual(race.map(r=>r.status).sort(),[201,409]);
+assert.equal((await request('/products/'+c.pid,'GET',undefined,token)).quantity,0);
+console.log('PASS: registration normal/10, JWT, X2/Y5, totals, timestamps, shipment, rollback, authorization, concurrent stock');
+console.log(JSON.stringify({uid:user.uid,oid:o.oid,shipid:o.shipment.shipid,x:x.pid,y:y.pid}));
