@@ -46,7 +46,7 @@ model Order {
   total Decimal @db.Decimal(14,2)
   user User @relation(fields: [uid], references: [uid])
   items OrderDetail[]
-  shipment Shipment?
+  shipments Shipment[]
 }
 model OrderDetail {
   oid Int
@@ -59,7 +59,8 @@ model OrderDetail {
 }
 model Shipment {
   shipid Int @id @default(autoincrement())
-  oid Int @unique
+  oid Int
   status String @default("PENDING") @db.VarChar(50)
   order Order @relation(fields: [oid], references: [oid])
+  @@index([oid])
 }

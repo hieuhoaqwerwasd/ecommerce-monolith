@@ -23,7 +23,19 @@ assert.ok(Date.parse(o.createat)>=start-2000);assert.equal(o.items.length,2);
 assert.equal((await request('/products/'+x.pid,'GET',undefined,token)).quantity,8);
 assert.equal((await request('/products/'+y.pid,'GET',undefined,token)).quantity,15);
 assert.equal((await request('/shipments/'+o.shipment.shipid,'GET',undefined,token)).status,'PENDING');
-await request('/orders/'+o.oid,'GET',undefined,token);
+assert.equal(o.shipments.length,1);
+await request('/orders/'+o.oid+'/shipments','POST',{},token,403);
+const extra=await request('/orders/'+o.oid+'/shipments','POST',{},admin,201);
+assert.equal(extra.oid,o.oid);
+const detail=await request('/orders/'+o.oid,'GET',undefined,token);
+assert.equal(detail.shipments.length,2,'one order supports multiple shipments');
+assert.equal(detail.shipment.shipid,o.shipment.shipid,'legacy alias remains stable');
+const otherCredentials={username:'other_'+Date.now(),password:'DemoPass123!'};
+await request('/auth/register','POST',otherCredentials,undefined,201);
+const otherToken=(await request('/auth/login','POST',otherCredentials)).accessToken;
+await request('/orders/'+o.oid,'GET',undefined,otherToken,403);
+await request('/shipments/'+extra.shipid,'GET',undefined,otherToken,403);
+
 await request('/orders','POST',{items:[{pid:x.pid,qty:1},{pid:y.pid,qty:99999}]},token,409);
 assert.equal((await request('/products/'+x.pid,'GET',undefined,token)).quantity,8,'rollback restores earlier decrements');
 await request('/customers/'+user.uid,'PUT',{mid:1},token,403);
@@ -31,5 +43,5 @@ const c=await request('/products','POST',{pname:'Race',price:1,quantity:1},admin
 const race=await Promise.all([1,2].map(()=>fetch(base+'/api/orders',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({items:[{pid:c.pid,qty:1}]})})));
 assert.deepEqual(race.map(r=>r.status).sort(),[201,409]);
 assert.equal((await request('/products/'+c.pid,'GET',undefined,token)).quantity,0);
-console.log('PASS: registration normal/10, JWT, X2/Y5, totals, timestamps, shipment, rollback, authorization, concurrent stock');
+console.log('PASS: registration normal/10, JWT, X2/Y5, totals, timestamps, multiple shipments, ownership, rollback, authorization, concurrent stock');
 console.log(JSON.stringify({uid:user.uid,oid:o.oid,shipid:o.shipment.shipid,x:x.pid,y:y.pid}));

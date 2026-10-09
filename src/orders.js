@@ -13,6 +13,9 @@ export async function placeOrder(uid, rawItems) {
       if(changed.count!==1) throw new HttpError(409,'Insufficient stock');
       details.push({...item,unit_price:p.price});
     }
-    return tx.order.create({data:{uid,...calculateTotal(details,user.membership.score),items:{create:details},shipment:{create:{status:'PENDING'}}},include:{items:true,shipment:true}});
+    return tx.order.create({data:{uid,...calculateTotal(details,user.membership.score),items:{create:details},shipments:{create:{status:'PENDING'}}},include:{items:true,shipments:{orderBy:{shipid:'asc'}}}});
   },{isolationLevel:'Serializable'});
 }
+
+// Compatibility field for the existing Postman collection; shipments is canonical.
+export const orderResponse = order => ({...order, shipment: order.shipments[0] ?? null});

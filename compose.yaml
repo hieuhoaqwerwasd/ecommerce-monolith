@@ -15,11 +15,11 @@ services:
   api:
     build: .
     environment:
-      PORT: 3000
+      PORT: ${PORT:?Create .env first}
       DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@postgres:5432/ecommerce
       JWT_SECRET: ${JWT_SECRET:?Create .env first}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Create .env first}
-    ports: ["127.0.0.1:3002:3000"]
+    ports: ["127.0.0.1:${API_PORT:?Create .env first}:${PORT}"]
     depends_on:
       postgres: {condition: service_healthy}
 volumes:

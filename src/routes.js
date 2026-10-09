@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { db } from './db.js';
 import { authenticate,permit,owns } from './auth.js';
 import { HttpError,id,priceInput,transition } from './domain.js';
-import { placeOrder } from './orders.js';
+import { placeOrder, orderResponse } from './orders.js';
 export const routes=Router();
 function credentials(b) {
   if(!b || typeof b.username!=='string' || !/^[a-zA-Z0-9_.-]{3,50}$/.test(b.username) || typeof b.password!=='string' || b.password.length<6 || Buffer.byteLength(b.password)>72) throw new HttpError(400,'username 3..50; password 6..72 bytes required');
@@ -42,9 +42,14 @@ routes.get('/products/:pid',async(req,res)=>{const p=await db.product.findUnique
 routes.post('/products',permit('admin'),async(req,res)=>res.status(201).json(await db.product.create({data:priceInput(req.body)})));
 routes.put('/products/:pid',permit('admin'),async(req,res)=>res.json(await db.product.update({where:{pid:id(req.params.pid)},data:priceInput(req.body,true)})));
 routes.delete('/products/:pid',permit('admin'),async(req,res)=>{await db.product.delete({where:{pid:id(req.params.pid)}});res.json({message:'Product deleted'});});
-routes.post('/orders',async(req,res)=>res.status(201).json(await placeOrder(req.actor.uid,req.body?.items)));
-routes.get('/orders',async(req,res)=>res.json({items:await db.order.findMany({where:req.actor.role==='admin'?{}:{uid:req.actor.uid},include:{items:true,shipment:true}})}));
-routes.get('/orders/:oid',async(req,res)=>{const o=await db.order.findUnique({where:{oid:id(req.params.oid)},include:{items:true,shipment:true}});if(!o)throw new HttpError(404,'Order not found');owns(req.actor,o.uid);res.json(o);});
+routes.post('/orders',async(req,res)=>res.status(201).json(orderResponse(await placeOrder(req.actor.uid,req.body?.items))));
+routes.get('/orders',async(req,res)=>res.json({items:await db.order.findMany({where:req.actor.role==='admin'?{}:{uid:req.actor.uid},include:{items:true,shipments:{orderBy:{shipid:'asc'}}}})}));
+routes.get('/orders/:oid',async(req,res)=>{const o=await db.order.findUnique({where:{oid:id(req.params.oid)},include:{items:true,shipments:{orderBy:{shipid:'asc'}}}});if(!o)throw new HttpError(404,'Order not found');owns(req.actor,o.uid);res.json(orderResponse(o));});
+routes.post('/orders/:oid/shipments',permit('admin','staff'),async(req,res)=>{
+  const oid=id(req.params.oid);
+  if(!await db.order.findUnique({where:{oid}}))throw new HttpError(404,'Order not found');
+  res.status(201).json(await db.shipment.create({data:{oid,status:'PENDING'}}));
+});
 routes.get('/shipments/:shipid',async(req,res)=>{const s=await db.shipment.findUnique({where:{shipid:id(req.params.shipid)},include:{order:{select:{uid:true}}}});if(!s)throw new HttpError(404,'Shipment not found');if(req.actor.role!=='staff')owns(req.actor,s.order.uid);res.json(s);});
 routes.patch('/shipments/:shipid/status',permit('admin','staff'),async(req,res)=>{
   const shipid=id(req.params.shipid);const s=await db.shipment.findUnique({where:{shipid}});if(!s)throw new HttpError(404,'Shipment not found');transition(s.status,req.body?.status);
